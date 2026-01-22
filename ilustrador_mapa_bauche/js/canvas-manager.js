@@ -10,12 +10,16 @@ let dimensionesOriginales = { width: 0, height: 0 };
 let puntosPoligono = [];
 let lineasPoligono = [];
 
+// Estado de paneo
+let isPanning = false;
+let lastPosX = 0;
+let lastPosY = 0;
+
 /**
  * Inicializa el canvas de Fabric.js
  */
 function initCanvas() {
     const container = document.getElementById('canvas-container');
-    const canvasEl = document.getElementById('canvas-principal');
 
     // Obtener dimensiones del contenedor
     const width = container.clientWidth;
@@ -27,7 +31,8 @@ function initCanvas() {
         height: height,
         selection: true,
         preserveObjectStacking: true,
-        backgroundColor: '#e5e5e5'
+        backgroundColor: '#d0d0d0',
+        renderOnAddRemove: true
     });
 
     const canvas = AppState.canvas;
@@ -35,14 +40,79 @@ function initCanvas() {
     // Eventos del canvas
     canvas.on('mouse:move', onMouseMove);
     canvas.on('mouse:down', onMouseDown);
+    canvas.on('mouse:up', onMouseUp);
+    canvas.on('mouse:wheel', onMouseWheel);
     canvas.on('object:modified', onObjectModified);
-    canvas.on('object:selected', onObjectSelected);
+    canvas.on('selection:created', onObjectSelected);
+    canvas.on('selection:updated', onObjectSelected);
     canvas.on('selection:cleared', onSelectionCleared);
 
     // Responsive
     window.addEventListener('resize', ajustarTamanoCanvas);
 
+    // Cargar imagen por defecto
+    cargarImagenPorDefecto();
+
     console.log('Canvas Fabric.js inicializado');
+}
+
+/**
+ * Carga la imagen PLANO CASAS.png automaticamente
+ */
+function cargarImagenPorDefecto() {
+    const rutaImagen = 'assets/PLANO CASAS.png';
+
+    fabric.Image.fromURL(rutaImagen, function(img) {
+        if (!img || img.width === 0) {
+            console.log('No se pudo cargar la imagen por defecto');
+            return;
+        }
+
+        const canvas = AppState.canvas;
+
+        // Guardar dimensiones originales
+        dimensionesOriginales.width = img.width;
+        dimensionesOriginales.height = img.height;
+
+        // Agregar imagen como objeto (no como fondo) para mejor control
+        img.set({
+            left: 0,
+            top: 0,
+            selectable: false,
+            evented: false,
+            hoverCursor: 'default'
+        });
+
+        canvas.add(img);
+        canvas.sendToBack(img);
+
+        // Guardar referencia
+        AppState.imagenFondo = img;
+
+        // Ajustar zoom para ver toda la imagen
+        const escalaX = canvas.width / img.width;
+        const escalaY = canvas.height / img.height;
+        const escala = Math.min(escalaX, escalaY) * 0.95;
+
+        canvas.setZoom(escala);
+
+        // Centrar la imagen
+        const vpw = canvas.width / escala;
+        const vph = canvas.height / escala;
+        const offsetX = (vpw - img.width) / 2;
+        const offsetY = (vph - img.height) / 2;
+
+        canvas.absolutePan({ x: -offsetX * escala, y: -offsetY * escala });
+
+        // Ocultar placeholder
+        document.getElementById('canvas-placeholder')?.classList.add('hidden');
+
+        AppState.imagenCargada = true;
+        actualizarZoomUI(escala);
+
+        canvas.renderAll();
+        mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
+    }, { crossOrigin: 'anonymous' });
 }
 
 /**
@@ -60,7 +130,7 @@ function ajustarTamanoCanvas() {
 }
 
 /**
- * Carga una imagen como fondo del canvas
+ * Carga una imagen desde archivo como fondo del canvas
  */
 function cargarImagenFondo(archivo) {
     const reader = new FileReader();
@@ -69,28 +139,44 @@ function cargarImagenFondo(archivo) {
         fabric.Image.fromURL(event.target.result, function(img) {
             const canvas = AppState.canvas;
 
+            // Remover imagen anterior si existe
+            if (AppState.imagenFondo) {
+                canvas.remove(AppState.imagenFondo);
+            }
+
             // Guardar dimensiones originales
             dimensionesOriginales.width = img.width;
             dimensionesOriginales.height = img.height;
 
-            // Calcular escala para ajustar al canvas
+            // Agregar imagen como objeto
+            img.set({
+                left: 0,
+                top: 0,
+                selectable: false,
+                evented: false,
+                hoverCursor: 'default'
+            });
+
+            canvas.add(img);
+            canvas.sendToBack(img);
+            AppState.imagenFondo = img;
+
+            // Ajustar zoom para ver toda la imagen
             const escalaX = canvas.width / img.width;
             const escalaY = canvas.height / img.height;
-            const escala = Math.min(escalaX, escalaY, 1); // No agrandar mas de 100%
+            const escala = Math.min(escalaX, escalaY) * 0.95;
 
-            // Establecer como fondo
-            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
-                scaleX: escala,
-                scaleY: escala,
-                originX: 'left',
-                originY: 'top'
-            });
+            canvas.setZoom(escala);
+            canvas.absolutePan({ x: 0, y: 0 });
 
             // Ocultar placeholder
             document.getElementById('canvas-placeholder')?.classList.add('hidden');
 
             AppState.imagenCargada = true;
-            mostrarNotificacion('Imagen cargada correctamente', 'success');
+            actualizarZoomUI(escala);
+
+            canvas.renderAll();
+            mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
         });
     };
 
@@ -127,7 +213,9 @@ function setCanvasMode(modo) {
             canvas.defaultCursor = 'text';
             canvas.hoverCursor = 'text';
             canvas.forEachObject(obj => {
-                obj.selectable = false;
+                if (obj !== AppState.imagenFondo) {
+                    obj.selectable = false;
+                }
             });
             break;
 
@@ -136,7 +224,9 @@ function setCanvasMode(modo) {
             canvas.defaultCursor = 'crosshair';
             canvas.hoverCursor = 'crosshair';
             canvas.forEachObject(obj => {
-                obj.selectable = false;
+                if (obj !== AppState.imagenFondo) {
+                    obj.selectable = false;
+                }
             });
             break;
     }
@@ -145,10 +235,48 @@ function setCanvasMode(modo) {
 }
 
 /**
+ * Evento: rueda del mouse para zoom
+ */
+function onMouseWheel(opt) {
+    const canvas = AppState.canvas;
+    const delta = opt.e.deltaY;
+    let zoom = canvas.getZoom();
+
+    // Zoom mas suave
+    zoom *= 0.999 ** delta;
+
+    // Limitar zoom
+    if (zoom > 5) zoom = 5;
+    if (zoom < 0.05) zoom = 0.05;
+
+    // Zoom hacia el punto del mouse
+    canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+
+    opt.e.preventDefault();
+    opt.e.stopPropagation();
+
+    actualizarZoomUI(zoom);
+}
+
+/**
  * Evento: movimiento del mouse
  */
 function onMouseMove(options) {
-    const pointer = AppState.canvas.getPointer(options.e);
+    const canvas = AppState.canvas;
+
+    // Paneo con boton medio o Alt+click
+    if (isPanning) {
+        const e = options.e;
+        const vpt = canvas.viewportTransform;
+        vpt[4] += e.clientX - lastPosX;
+        vpt[5] += e.clientY - lastPosY;
+        canvas.requestRenderAll();
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        return;
+    }
+
+    const pointer = canvas.getPointer(options.e);
 
     // Actualizar barra de estado
     document.getElementById('status-pos').textContent =
@@ -164,9 +292,22 @@ function onMouseMove(options) {
  * Evento: click en el canvas
  */
 function onMouseDown(options) {
-    if (options.target) return; // Click en un objeto existente
+    const canvas = AppState.canvas;
+    const e = options.e;
 
-    const pointer = AppState.canvas.getPointer(options.e);
+    // Paneo con boton medio o Alt+click izquierdo
+    if (e.button === 1 || (e.altKey && e.button === 0)) {
+        isPanning = true;
+        canvas.selection = false;
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        canvas.defaultCursor = 'grabbing';
+        return;
+    }
+
+    if (options.target && options.target !== AppState.imagenFondo) return;
+
+    const pointer = canvas.getPointer(options.e);
 
     switch (AppState.modoActual) {
         case 'text':
@@ -180,12 +321,25 @@ function onMouseDown(options) {
 }
 
 /**
+ * Evento: soltar click
+ */
+function onMouseUp(options) {
+    const canvas = AppState.canvas;
+
+    if (isPanning) {
+        isPanning = false;
+        canvas.selection = AppState.modoActual === 'select';
+        setCanvasMode(AppState.modoActual);
+    }
+}
+
+/**
  * Evento: objeto modificado (movido, rotado, etc)
  */
 function onObjectModified(options) {
     const obj = options.target;
 
-    if (obj.textoId) {
+    if (obj && obj.textoId) {
         // Guardar nueva posicion del texto
         actualizarTexto(obj.textoId, {
             contenido: obj.text,
@@ -204,9 +358,9 @@ function onObjectModified(options) {
  * Evento: objeto seleccionado
  */
 function onObjectSelected(options) {
-    const obj = options.target;
+    const obj = options.selected ? options.selected[0] : null;
 
-    if (obj.loteId) {
+    if (obj && obj.loteId) {
         seleccionarLote(obj.loteId);
     }
 }
@@ -240,11 +394,13 @@ function agregarTextoEnPosicion(posicion) {
     // Color segun tipo
     const color = esOficial ? '#0000FF' : '#FF6600';
 
-    // Crear texto interactivo
+    // Crear texto interactivo - tamano relativo a la imagen
+    const fontSize = Math.max(12, Math.round(dimensionesOriginales.width / 150));
+
     const texto = new fabric.IText(contenido, {
         left: posicion.x,
         top: posicion.y,
-        fontSize: 14,
+        fontSize: fontSize,
         fill: color,
         fontFamily: 'Arial',
         fontWeight: 'bold',
@@ -262,7 +418,7 @@ function agregarTextoEnPosicion(posicion) {
         contenido: contenido,
         pos_x: posicion.x,
         pos_y: posicion.y,
-        font_size: 14,
+        font_size: fontSize,
         color: color
     });
 
@@ -275,6 +431,8 @@ function agregarTextoEnPosicion(posicion) {
     // Volver a modo seleccion
     cambiarHerramienta('select');
     canvas.renderAll();
+
+    mostrarNotificacion('Texto agregado. Arrastralo para posicionarlo.', 'success');
 }
 
 /**
@@ -292,10 +450,11 @@ function agregarPuntoPoligono(posicion, evento) {
     puntosPoligono.push({ x: posicion.x, y: posicion.y });
 
     // Dibujar punto
+    const puntoSize = Math.max(4, dimensionesOriginales.width / 500);
     const punto = new fabric.Circle({
-        left: posicion.x - 4,
-        top: posicion.y - 4,
-        radius: 4,
+        left: posicion.x - puntoSize,
+        top: posicion.y - puntoSize,
+        radius: puntoSize,
         fill: '#2563eb',
         selectable: false,
         evented: false,
@@ -310,7 +469,7 @@ function agregarPuntoPoligono(posicion, evento) {
             [puntoAnterior.x, puntoAnterior.y, posicion.x, posicion.y],
             {
                 stroke: '#2563eb',
-                strokeWidth: 2,
+                strokeWidth: Math.max(2, dimensionesOriginales.width / 1000),
                 selectable: false,
                 evented: false,
                 lineaPoligono: true
@@ -324,7 +483,7 @@ function agregarPuntoPoligono(posicion, evento) {
 
     // Mostrar instruccion
     if (puntosPoligono.length === 1) {
-        mostrarNotificacion('Click para agregar mas puntos. Doble click para cerrar.', 'info');
+        mostrarNotificacion('Click para agregar puntos. Doble click para cerrar el poligono.', 'info');
     }
 }
 
@@ -377,8 +536,7 @@ function finalizarPoligono() {
         return;
     }
 
-    // Por ahora, asociar al ultimo lote o crear selector
-    // TODO: Mostrar selector de lote
+    // Asociar al ultimo lote creado
     const loteId = lotes[lotes.length - 1].id;
     const esOficial = lotes[lotes.length - 1].es_oficial === 1;
 
@@ -393,7 +551,7 @@ function finalizarPoligono() {
     const poligono = new fabric.Polygon(puntosPoligono, {
         fill: colorRelleno,
         stroke: colorBorde,
-        strokeWidth: 2,
+        strokeWidth: Math.max(2, dimensionesOriginales.width / 1000),
         selectable: false,
         evented: true,
         hoverCursor: 'pointer',
@@ -419,7 +577,13 @@ function finalizarPoligono() {
     });
 
     canvas.add(poligono);
-    canvas.sendToBack(poligono);
+
+    // Enviar detras de los textos pero delante de la imagen
+    const objetos = canvas.getObjects();
+    const indexImagen = objetos.indexOf(AppState.imagenFondo);
+    if (indexImagen >= 0) {
+        canvas.moveTo(poligono, indexImagen + 1);
+    }
 
     // Guardar en BD
     const poligonoId = crearPoligono({
@@ -438,7 +602,7 @@ function finalizarPoligono() {
     AppState.cambiosSinGuardar = true;
 
     canvas.renderAll();
-    mostrarNotificacion('Poligono creado', 'success');
+    mostrarNotificacion('Poligono creado para: ' + lotes[lotes.length - 1].nombre_propietario, 'success');
 
     // Volver a modo seleccion
     cambiarHerramienta('select');
@@ -449,6 +613,7 @@ function finalizarPoligono() {
  */
 function cancelarPoligono() {
     const canvas = AppState.canvas;
+    if (!canvas) return;
 
     // Remover puntos y lineas temporales
     canvas.getObjects().filter(o => o.puntoPoligono || o.lineaPoligono || o.lineaTemporal)
@@ -461,6 +626,15 @@ function cancelarPoligono() {
 }
 
 /**
+ * Actualiza la UI del zoom
+ */
+function actualizarZoomUI(zoom) {
+    const porcentaje = Math.round(zoom * 100) + '%';
+    document.getElementById('zoom-level').textContent = porcentaje;
+    document.getElementById('status-zoom').textContent = 'Zoom: ' + porcentaje;
+}
+
+/**
  * Controles de zoom
  */
 function hacerZoom(factor) {
@@ -468,30 +642,39 @@ function hacerZoom(factor) {
     if (!canvas) return;
 
     let zoom = canvas.getZoom() * factor;
-    zoom = Math.min(Math.max(zoom, 0.1), 5); // Limitar entre 10% y 500%
+    zoom = Math.min(Math.max(zoom, 0.05), 5);
 
-    canvas.setZoom(zoom);
-    canvas.renderAll();
+    // Zoom hacia el centro del canvas
+    const center = {
+        x: canvas.width / 2,
+        y: canvas.height / 2
+    };
 
-    // Actualizar UI
-    document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
-    document.getElementById('status-zoom').textContent = 'Zoom: ' + Math.round(zoom * 100) + '%';
+    canvas.zoomToPoint(center, zoom);
+    actualizarZoomUI(zoom);
 }
 
 function ajustarZoom() {
     const canvas = AppState.canvas;
-    if (!canvas || !canvas.backgroundImage) return;
+    if (!canvas || !AppState.imagenFondo) return;
 
-    const img = canvas.backgroundImage;
-    const escalaX = canvas.width / (img.width * img.scaleX);
-    const escalaY = canvas.height / (img.height * img.scaleY);
-    const escala = Math.min(escalaX, escalaY, 1);
+    const img = AppState.imagenFondo;
+    const escalaX = canvas.width / img.width;
+    const escalaY = canvas.height / img.height;
+    const escala = Math.min(escalaX, escalaY) * 0.95;
 
     canvas.setZoom(escala);
-    canvas.renderAll();
 
-    document.getElementById('zoom-level').textContent = Math.round(escala * 100) + '%';
-    document.getElementById('status-zoom').textContent = 'Zoom: ' + Math.round(escala * 100) + '%';
+    // Centrar
+    const vpw = canvas.width / escala;
+    const vph = canvas.height / escala;
+    const offsetX = (vpw - img.width) / 2;
+    const offsetY = (vph - img.height) / 2;
+
+    canvas.absolutePan({ x: -offsetX * escala, y: -offsetY * escala });
+
+    actualizarZoomUI(escala);
+    canvas.renderAll();
 }
 
 /**
@@ -501,8 +684,8 @@ async function cargarTodosLosElementos() {
     const canvas = AppState.canvas;
     if (!canvas) return;
 
-    // Limpiar canvas (excepto fondo)
-    const objetosAEliminar = canvas.getObjects().filter(o => !o.isBackground);
+    // Limpiar canvas (excepto imagen de fondo)
+    const objetosAEliminar = canvas.getObjects().filter(o => o !== AppState.imagenFondo);
     objetosAEliminar.forEach(o => canvas.remove(o));
 
     // Cargar textos
@@ -564,7 +747,6 @@ async function cargarTodosLosElementos() {
         });
 
         canvas.add(poligono);
-        canvas.sendToBack(poligono);
     });
 
     canvas.renderAll();
@@ -576,9 +758,6 @@ async function cargarTodosLosElementos() {
 function guardarEstadoActual() {
     const canvas = AppState.canvas;
     if (!canvas) return;
-
-    // Los textos ya se guardan al modificarse
-    // Aqui podriamos guardar configuracion adicional
 
     console.log('Estado guardado');
 }
