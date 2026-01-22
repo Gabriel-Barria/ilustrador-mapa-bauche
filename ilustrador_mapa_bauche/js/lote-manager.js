@@ -96,8 +96,105 @@ function seleccionarLote(loteId) {
     document.querySelector(`input[name="prop-tipo"][value="${lote.es_oficial}"]`).checked = true;
     document.getElementById('prop-notas').value = lote.notas || '';
 
-    // Resaltar objetos del lote en el canvas
-    resaltarLoteEnCanvas(loteId);
+    // Verificar si el lote tiene texto en el canvas
+    const canvas = AppState.canvas;
+    if (canvas) {
+        const textoExistente = canvas.getObjects().find(o => o.loteId === loteId && o.type === 'i-text');
+
+        if (!textoExistente) {
+            // No tiene texto - crear uno en el centro de la vista actual
+            crearTextoEnCentroVista(loteId, lote);
+        } else {
+            // Tiene texto - resaltar y centrar vista en él
+            resaltarLoteEnCanvas(loteId);
+            centrarVistaEnObjeto(textoExistente);
+        }
+    }
+}
+
+/**
+ * Crea un texto en el centro de la vista actual del canvas
+ */
+function crearTextoEnCentroVista(loteId, lote) {
+    const canvas = AppState.canvas;
+    if (!canvas) return;
+
+    // Calcular el centro de la vista actual
+    const zoom = canvas.getZoom();
+    const vpt = canvas.viewportTransform;
+
+    // Centro del viewport en coordenadas del canvas
+    const centerX = (-vpt[4] + canvas.width / 2) / zoom;
+    const centerY = (-vpt[5] + canvas.height / 2) / zoom;
+
+    const esOficial = lote.es_oficial === 1;
+    const color = esOficial ? '#0000FF' : '#FF6600';
+    const fontSize = Math.max(16, Math.round(dimensionesOriginales.width / 120));
+
+    // Guardar estado para undo
+    if (typeof UndoManager !== 'undefined') {
+        UndoManager.guardarEstado();
+    }
+
+    // Crear texto
+    const texto = new fabric.IText(lote.nombre_propietario, {
+        left: centerX,
+        top: centerY,
+        fontSize: fontSize,
+        fill: color,
+        fontFamily: 'Arial',
+        fontWeight: 'bold',
+        editable: true,
+        loteId: loteId,
+        esOficial: esOficial,
+        originX: 'center',
+        originY: 'center'
+    });
+
+    canvas.add(texto);
+    canvas.setActiveObject(texto);
+
+    // Guardar en base de datos
+    const textoId = crearTexto({
+        lote_id: loteId,
+        contenido: lote.nombre_propietario,
+        pos_x: centerX,
+        pos_y: centerY,
+        font_size: fontSize,
+        color: color
+    });
+
+    texto.textoId = textoId;
+
+    // Ajustar origen después de guardar para que las coordenadas sean correctas
+    texto.set({ originX: 'left', originY: 'top' });
+    texto.setCoords();
+
+    canvas.renderAll();
+    AppState.cambiosSinGuardar = true;
+
+    mostrarNotificacion(`"${lote.nombre_propietario}" agregado. Arrastralo para posicionarlo.`, 'success');
+}
+
+/**
+ * Centra la vista del canvas en un objeto específico
+ */
+function centrarVistaEnObjeto(objeto) {
+    const canvas = AppState.canvas;
+    if (!canvas || !objeto) return;
+
+    const zoom = canvas.getZoom();
+    const objCenter = objeto.getCenterPoint();
+
+    // Calcular el desplazamiento necesario para centrar el objeto
+    const vpw = canvas.width / zoom;
+    const vph = canvas.height / zoom;
+
+    const newVptX = -(objCenter.x - vpw / 2) * zoom;
+    const newVptY = -(objCenter.y - vph / 2) * zoom;
+
+    canvas.setViewportTransform([zoom, 0, 0, zoom, newVptX, newVptY]);
+    canvas.renderAll();
 }
 
 /**
