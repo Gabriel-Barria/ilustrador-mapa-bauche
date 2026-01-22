@@ -57,10 +57,10 @@ function initCanvas() {
 }
 
 /**
- * Carga la imagen PLANO CASAS.png automaticamente
+ * Carga la imagen ORIGINAL automaticamente (sin los textos de Paint)
  */
 function cargarImagenPorDefecto() {
-    const rutaImagen = 'assets/PLANO CASAS.png';
+    const rutaImagen = 'assets/20251111_201421.jpg';
 
     fabric.Image.fromURL(rutaImagen, function(img) {
         if (!img || img.width === 0) {
@@ -112,6 +112,11 @@ function cargarImagenPorDefecto() {
 
         canvas.renderAll();
         mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
+
+        // Cargar datos iniciales después de que la imagen esté lista
+        if (typeof cargarDatosIniciales === 'function') {
+            setTimeout(() => cargarDatosIniciales(), 500);
+        }
     }, { crossOrigin: 'anonymous' });
 }
 
