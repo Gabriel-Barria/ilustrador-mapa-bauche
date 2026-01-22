@@ -18,7 +18,8 @@ async function renderizarListaLotes(filtro = 'all', busqueda = '') {
         const termino = busqueda.toLowerCase();
         lotesFiltrados = lotes.filter(l =>
             l.nombre_propietario.toLowerCase().includes(termino) ||
-            (l.rol_propiedad && l.rol_propiedad.toLowerCase().includes(termino))
+            (l.rol_propiedad && l.rol_propiedad.toLowerCase().includes(termino)) ||
+            (l.telefono && l.telefono.includes(termino))
         );
     }
 
@@ -91,6 +92,7 @@ function seleccionarLote(loteId) {
     // Llenar formulario
     document.getElementById('prop-nombre').value = lote.nombre_propietario;
     document.getElementById('prop-rol').value = lote.rol_propiedad || '';
+    document.getElementById('prop-telefono').value = lote.telefono || '';
     document.querySelector(`input[name="prop-tipo"][value="${lote.es_oficial}"]`).checked = true;
     document.getElementById('prop-notas').value = lote.notas || '';
 
@@ -127,6 +129,7 @@ function actualizarLoteSeleccionado() {
     const datos = {
         nombre_propietario: document.getElementById('prop-nombre').value.trim(),
         rol_propiedad: document.getElementById('prop-rol').value.trim() || null,
+        telefono: document.getElementById('prop-telefono').value.trim() || null,
         es_oficial: parseInt(document.querySelector('input[name="prop-tipo"]:checked').value),
         notas: document.getElementById('prop-notas').value.trim() || null
     };

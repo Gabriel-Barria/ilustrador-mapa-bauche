@@ -234,6 +234,17 @@ function setCanvasMode(modo) {
                 }
             });
             break;
+
+        case 'pan':
+            canvas.selection = false;
+            canvas.defaultCursor = 'grab';
+            canvas.hoverCursor = 'grab';
+            canvas.forEachObject(obj => {
+                if (obj !== AppState.imagenFondo) {
+                    obj.selectable = false;
+                }
+            });
+            break;
     }
 
     canvas.renderAll();
@@ -300,13 +311,34 @@ function onMouseDown(options) {
     const canvas = AppState.canvas;
     const e = options.e;
 
-    // Paneo con boton medio o Alt+click izquierdo
+    // Modo pan: siempre panear al arrastrar
+    if (AppState.modoActual === 'pan') {
+        isPanning = true;
+        canvas.selection = false;
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        canvas.defaultCursor = 'grabbing';
+        return;
+    }
+
+    // Paneo con boton medio o Alt+click izquierdo (en cualquier modo)
     if (e.button === 1 || (e.altKey && e.button === 0)) {
         isPanning = true;
         canvas.selection = false;
         lastPosX = e.clientX;
         lastPosY = e.clientY;
         canvas.defaultCursor = 'grabbing';
+        return;
+    }
+
+    // Click derecho para pan rapido
+    if (e.button === 2) {
+        isPanning = true;
+        canvas.selection = false;
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        canvas.defaultCursor = 'grabbing';
+        e.preventDefault();
         return;
     }
 

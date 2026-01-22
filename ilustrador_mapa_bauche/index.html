@@ -12,6 +12,7 @@
         <header id="toolbar">
             <h1>Editor Plano San Rafael</h1>
             <div class="toolbar-actions">
+                <button id="btn-deshacer" class="btn" title="Deshacer (Ctrl+Z)">↶ Deshacer</button>
                 <button id="btn-guardar" class="btn btn-primary">Guardar</button>
                 <div class="dropdown">
                     <button class="btn">Exportar</button>
@@ -51,6 +52,10 @@
                         <button id="tool-polygon" class="tool-btn" title="Dibujar Poligono (P)">
                             <span class="icon">&#11039;</span>
                             <span class="label">Poligono</span>
+                        </button>
+                        <button id="tool-pan" class="tool-btn" title="Mover vista (Espacio)">
+                            <span class="icon">✋</span>
+                            <span class="label">Mover</span>
                         </button>
                     </div>
                     <div class="zoom-controls">
@@ -103,6 +108,10 @@
                         <div class="form-group">
                             <label for="prop-rol">Numero de Rol</label>
                             <input type="text" id="prop-rol" placeholder="Ej: 123-456">
+                        </div>
+                        <div class="form-group">
+                            <label for="prop-telefono">Telefono</label>
+                            <input type="text" id="prop-telefono" placeholder="Ej: +56912345678">
                         </div>
                         <div class="form-group">
                             <label>Tipo de Lote</label>
@@ -161,6 +170,10 @@
                 <div class="form-group">
                     <label for="nuevo-rol">Numero de Rol</label>
                     <input type="text" id="nuevo-rol">
+                </div>
+                <div class="form-group">
+                    <label for="nuevo-telefono">Telefono</label>
+                    <input type="text" id="nuevo-telefono" placeholder="+56...">
                 </div>
                 <div class="form-group">
                     <label>Tipo</label>

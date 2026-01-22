@@ -10,7 +10,82 @@ const AppState = {
     modoActual: 'select',
     loteSeleccionado: null,
     imagenCargada: false,
-    cambiosSinGuardar: false
+    cambiosSinGuardar: false,
+    modoAnterior: null // Para restaurar despues de pan con espacio
+};
+
+// Sistema de Undo
+const UndoManager = {
+    historial: [],
+    maxHistorial: 50,
+
+    guardarEstado() {
+        const canvas = AppState.canvas;
+        if (!canvas) return;
+
+        // Guardar estado del canvas (sin la imagen de fondo)
+        const objetos = canvas.getObjects().filter(o => o !== AppState.imagenFondo);
+        const estado = objetos.map(obj => ({
+            type: obj.type,
+            left: obj.left,
+            top: obj.top,
+            text: obj.text,
+            textoId: obj.textoId,
+            loteId: obj.loteId,
+            esOficial: obj.esOficial,
+            fontSize: obj.fontSize,
+            fill: obj.fill,
+            angle: obj.angle
+        }));
+
+        this.historial.push(JSON.stringify(estado));
+
+        // Limitar historial
+        if (this.historial.length > this.maxHistorial) {
+            this.historial.shift();
+        }
+    },
+
+    deshacer() {
+        if (this.historial.length < 2) {
+            mostrarNotificacion('No hay mas acciones para deshacer', 'info');
+            return;
+        }
+
+        // Quitar estado actual
+        this.historial.pop();
+
+        // Obtener estado anterior
+        const estadoAnterior = JSON.parse(this.historial[this.historial.length - 1]);
+
+        // Restaurar canvas
+        const canvas = AppState.canvas;
+        const objetosAEliminar = canvas.getObjects().filter(o => o !== AppState.imagenFondo);
+        objetosAEliminar.forEach(o => canvas.remove(o));
+
+        // Recrear objetos
+        estadoAnterior.forEach(datos => {
+            if (datos.type === 'i-text' && datos.text) {
+                const texto = new fabric.IText(datos.text, {
+                    left: datos.left,
+                    top: datos.top,
+                    fontSize: datos.fontSize || 14,
+                    fill: datos.fill || '#0000FF',
+                    fontFamily: 'Arial',
+                    fontWeight: 'bold',
+                    angle: datos.angle || 0,
+                    editable: true,
+                    textoId: datos.textoId,
+                    loteId: datos.loteId,
+                    esOficial: datos.esOficial
+                });
+                canvas.add(texto);
+            }
+        });
+
+        canvas.renderAll();
+        mostrarNotificacion('Accion deshecha', 'success');
+    }
 };
 
 // Inicializacion al cargar la pagina
@@ -59,6 +134,9 @@ function setupUIEvents() {
     document.getElementById('zoom-in')?.addEventListener('click', () => hacerZoom(1.1));
     document.getElementById('zoom-out')?.addEventListener('click', () => hacerZoom(0.9));
     document.getElementById('zoom-fit')?.addEventListener('click', ajustarZoom);
+
+    // Boton deshacer
+    document.getElementById('btn-deshacer')?.addEventListener('click', () => UndoManager.deshacer());
 
     // Filtros de lotes
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -135,13 +213,31 @@ function setupUIEvents() {
  * Configura los atajos de teclado
  */
 function setupKeyboardShortcuts() {
+    // Espacio para pan temporal
     document.addEventListener('keydown', (e) => {
-        // No procesar si estamos en un input
+        // Espacio activa pan temporal
+        if (e.code === 'Space' && !e.repeat) {
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                if (AppState.modoActual !== 'pan') {
+                    AppState.modoAnterior = AppState.modoActual;
+                    cambiarHerramienta('pan');
+                }
+            }
+        }
+
+        // No procesar otros atajos si estamos en un input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-            // Permitir Escape para salir del input
             if (e.key === 'Escape') {
                 e.target.blur();
             }
+            return;
+        }
+
+        // Ctrl/Cmd + Z: Deshacer
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            UndoManager.deshacer();
             return;
         }
 
@@ -156,13 +252,6 @@ function setupKeyboardShortcuts() {
         if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
             e.preventDefault();
             exportarPNG();
-            return;
-        }
-
-        // Ctrl/Cmd + P: Imprimir
-        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-            e.preventDefault();
-            imprimirCanvas();
             return;
         }
 
@@ -182,12 +271,15 @@ function setupKeyboardShortcuts() {
                     cambiarHerramienta('polygon');
                 }
                 break;
+            case 'm':
+            case 'M':
+                cambiarHerramienta('pan');
+                break;
             case 'Delete':
             case 'Backspace':
                 eliminarObjetoSeleccionado();
                 break;
             case 'Escape':
-                // Cancelar operacion actual
                 if (AppState.modoActual === 'polygon') {
                     cancelarPoligono();
                 }
@@ -206,6 +298,16 @@ function setupKeyboardShortcuts() {
                 break;
         }
     });
+
+    // Soltar espacio restaura modo anterior
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            if (AppState.modoAnterior && AppState.modoActual === 'pan') {
+                cambiarHerramienta(AppState.modoAnterior);
+                AppState.modoAnterior = null;
+            }
+        }
+    });
 }
 
 /**
@@ -217,6 +319,9 @@ function eliminarObjetoSeleccionado() {
 
     const objetoActivo = canvas.getActiveObject();
     if (!objetoActivo) return;
+
+    // Guardar estado para undo
+    UndoManager.guardarEstado();
 
     // Si es un texto, eliminar de la BD tambien
     if (objetoActivo.textoId) {
@@ -235,7 +340,6 @@ function eliminarObjetoSeleccionado() {
 let autoSaveInterval = null;
 
 function setupAutoSave() {
-    // Guardar cada 30 segundos si hay cambios
     autoSaveInterval = setInterval(() => {
         if (AppState.cambiosSinGuardar) {
             console.log('Auto-guardando...');
@@ -264,7 +368,8 @@ function cambiarHerramienta(herramienta) {
     const modos = {
         'select': 'Seleccionar',
         'text': 'Agregar Texto',
-        'polygon': 'Dibujar Poligono'
+        'polygon': 'Dibujar Poligono',
+        'pan': 'Mover Vista'
     };
     document.getElementById('status-modo').textContent = `Modo: ${modos[herramienta] || herramienta}`;
 }
@@ -281,7 +386,6 @@ function actualizarBarraEstado() {
  * Muestra una notificacion temporal
  */
 function mostrarNotificacion(mensaje, tipo = 'info') {
-    // Remover notificacion anterior si existe
     const anterior = document.querySelector('.notification');
     if (anterior) anterior.remove();
 
@@ -311,6 +415,7 @@ async function crearNuevoLote(e) {
 
     const nombre = document.getElementById('nuevo-nombre').value.trim();
     const rol = document.getElementById('nuevo-rol').value.trim();
+    const telefono = document.getElementById('nuevo-telefono')?.value.trim();
     const tipo = document.querySelector('input[name="nuevo-tipo"]:checked').value;
 
     if (!nombre) {
@@ -322,6 +427,7 @@ async function crearNuevoLote(e) {
         const loteId = await crearLote({
             nombre_propietario: nombre,
             rol_propiedad: rol || null,
+            telefono: telefono || null,
             es_oficial: parseInt(tipo)
         });
 
@@ -340,7 +446,7 @@ async function crearNuevoLote(e) {
     }
 }
 
-// Funciones placeholder que seran implementadas en otros modulos
+// Funciones auxiliares
 function obtenerTotalLotes() {
     if (!AppState.db) return 0;
     try {
@@ -352,21 +458,18 @@ function obtenerTotalLotes() {
 }
 
 async function cargarLotesEnLista() {
-    // Implementado en lote-manager.js
     if (typeof renderizarListaLotes === 'function') {
         await renderizarListaLotes();
     }
 }
 
 function filtrarLotes(filtro) {
-    // Implementado en lote-manager.js
     if (typeof filtrarLotesEnLista === 'function') {
         filtrarLotesEnLista(filtro);
     }
 }
 
 function buscarLotes(termino) {
-    // Implementado en lote-manager.js
     if (typeof buscarLotesEnLista === 'function') {
         buscarLotesEnLista(termino);
     }
@@ -381,14 +484,12 @@ function guardarTodo() {
 }
 
 function guardarPropiedadesLote() {
-    // Implementado en lote-manager.js
     if (typeof actualizarLoteSeleccionado === 'function') {
         actualizarLoteSeleccionado();
     }
 }
 
 function eliminarLoteSeleccionado() {
-    // Implementado en lote-manager.js
     if (typeof eliminarLoteActual === 'function') {
         eliminarLoteActual();
     }

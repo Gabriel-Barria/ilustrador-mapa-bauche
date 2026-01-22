@@ -33,6 +33,7 @@ function crearEsquema() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_propietario TEXT NOT NULL,
             rol_propiedad TEXT,
+            telefono TEXT,
             es_oficial INTEGER DEFAULT 1,
             notas TEXT,
             fecha_creacion TEXT DEFAULT (datetime('now')),
@@ -83,9 +84,9 @@ function crearEsquema() {
 async function crearLote(datos) {
     const db = AppState.db;
     db.run(`
-        INSERT INTO lotes (nombre_propietario, rol_propiedad, es_oficial, notas)
-        VALUES (?, ?, ?, ?)
-    `, [datos.nombre_propietario, datos.rol_propiedad, datos.es_oficial, datos.notas || null]);
+        INSERT INTO lotes (nombre_propietario, rol_propiedad, telefono, es_oficial, notas)
+        VALUES (?, ?, ?, ?, ?)
+    `, [datos.nombre_propietario, datos.rol_propiedad, datos.telefono || null, datos.es_oficial, datos.notas || null]);
 
     // Obtener ID del ultimo registro insertado
     const result = db.exec('SELECT last_insert_rowid() as id');
@@ -133,11 +134,12 @@ function actualizarLote(id, datos) {
         UPDATE lotes SET
             nombre_propietario = ?,
             rol_propiedad = ?,
+            telefono = ?,
             es_oficial = ?,
             notas = ?,
             fecha_modificacion = datetime('now')
         WHERE id = ?
-    `, [datos.nombre_propietario, datos.rol_propiedad, datos.es_oficial, datos.notas, id]);
+    `, [datos.nombre_propietario, datos.rol_propiedad, datos.telefono, datos.es_oficial, datos.notas, id]);
 }
 
 function eliminarLote(id) {

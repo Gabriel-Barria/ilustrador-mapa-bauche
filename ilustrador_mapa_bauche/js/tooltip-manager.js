@@ -17,6 +17,7 @@ function mostrarTooltipLote(loteId) {
 
     contenido.innerHTML = `
         <strong>${lote.nombre_propietario}</strong>
+        ${lote.telefono ? `<span class="telefono">Tel: ${lote.telefono}</span>` : ''}
         <span class="rol">Rol: ${lote.rol_propiedad || 'Sin asignar'}</span>
         <span class="tipo ${lote.es_oficial ? 'oficial' : 'agregado'}">
             ${lote.es_oficial ? 'Lote Oficial' : 'Agregado Manualmente'}
