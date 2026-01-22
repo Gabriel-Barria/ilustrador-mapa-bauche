@@ -123,6 +123,125 @@ function setupUIEvents() {
             e.returnValue = '';
         }
     });
+
+    // Atajos de teclado
+    setupKeyboardShortcuts();
+
+    // Auto-guardado cada 30 segundos
+    setupAutoSave();
+}
+
+/**
+ * Configura los atajos de teclado
+ */
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // No procesar si estamos en un input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            // Permitir Escape para salir del input
+            if (e.key === 'Escape') {
+                e.target.blur();
+            }
+            return;
+        }
+
+        // Ctrl/Cmd + S: Guardar
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            guardarTodo();
+            return;
+        }
+
+        // Ctrl/Cmd + E: Exportar PNG
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            exportarPNG();
+            return;
+        }
+
+        // Ctrl/Cmd + P: Imprimir
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            imprimirCanvas();
+            return;
+        }
+
+        // Sin modificadores
+        switch (e.key) {
+            case 'v':
+            case 'V':
+                cambiarHerramienta('select');
+                break;
+            case 't':
+            case 'T':
+                cambiarHerramienta('text');
+                break;
+            case 'p':
+            case 'P':
+                if (!e.ctrlKey && !e.metaKey) {
+                    cambiarHerramienta('polygon');
+                }
+                break;
+            case 'Delete':
+            case 'Backspace':
+                eliminarObjetoSeleccionado();
+                break;
+            case 'Escape':
+                // Cancelar operacion actual
+                if (AppState.modoActual === 'polygon') {
+                    cancelarPoligono();
+                }
+                cambiarHerramienta('select');
+                deseleccionarLote();
+                break;
+            case '+':
+            case '=':
+                hacerZoom(1.1);
+                break;
+            case '-':
+                hacerZoom(0.9);
+                break;
+            case '0':
+                ajustarZoom();
+                break;
+        }
+    });
+}
+
+/**
+ * Elimina el objeto seleccionado del canvas
+ */
+function eliminarObjetoSeleccionado() {
+    const canvas = AppState.canvas;
+    if (!canvas) return;
+
+    const objetoActivo = canvas.getActiveObject();
+    if (!objetoActivo) return;
+
+    // Si es un texto, eliminar de la BD tambien
+    if (objetoActivo.textoId) {
+        eliminarTexto(objetoActivo.textoId);
+    }
+
+    canvas.remove(objetoActivo);
+    canvas.renderAll();
+    AppState.cambiosSinGuardar = true;
+    mostrarNotificacion('Objeto eliminado', 'success');
+}
+
+/**
+ * Configura el auto-guardado
+ */
+let autoSaveInterval = null;
+
+function setupAutoSave() {
+    // Guardar cada 30 segundos si hay cambios
+    autoSaveInterval = setInterval(() => {
+        if (AppState.cambiosSinGuardar) {
+            console.log('Auto-guardando...');
+            guardarTodo();
+        }
+    }, 30000);
 }
 
 /**
