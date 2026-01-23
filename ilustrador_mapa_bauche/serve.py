@@ -78,6 +78,9 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith('/api/projects/') and path.endswith('/metadata'):
             project_id = path.split('/')[3]
             self._actualizar_metadata(project_id)
+        elif path.startswith('/api/projects/') and path.endswith('/image'):
+            project_id = path.split('/')[3]
+            self._reemplazar_imagen(project_id)
         else:
             self.send_error(404)
 
@@ -327,6 +330,61 @@ class APIHandler(http.server.SimpleHTTPRequestHandler):
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
         self._enviar_json(meta)
+
+    def _reemplazar_imagen(self, project_id):
+        """PUT /api/projects/<id>/image - Reemplaza la imagen del proyecto"""
+        project_dir = os.path.join(DATA_DIR, project_id)
+        meta_path = os.path.join(project_dir, 'metadata.json')
+
+        if not os.path.isfile(meta_path):
+            self.send_error(404)
+            return
+
+        content_type = self.headers.get('Content-Type', '')
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+
+        if 'multipart/form-data' not in content_type:
+            self._enviar_json({'error': 'Usar multipart/form-data'}, 400)
+            return
+
+        boundary = content_type.split('boundary=')[1].strip()
+        parts = self._parse_multipart(body, boundary)
+
+        imagen_data = parts.get('imagen', {}).get('data', b'')
+        imagen_filename = parts.get('imagen', {}).get('filename', 'imagen.png')
+
+        if not imagen_data:
+            self._enviar_json({'error': 'No se recibio imagen'}, 400)
+            return
+
+        # Leer metadata actual
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+
+        # Eliminar imagen anterior
+        old_ext = meta.get('imagen_ext', '.png')
+        old_image = os.path.join(project_dir, f'image{old_ext}')
+        if os.path.isfile(old_image):
+            os.remove(old_image)
+
+        # Guardar nueva imagen
+        ext = os.path.splitext(imagen_filename)[1] or '.png'
+        imagen_path = os.path.join(project_dir, f'image{ext}')
+        with open(imagen_path, 'wb') as f:
+            f.write(imagen_data)
+
+        # Actualizar thumbnail
+        thumb_path = os.path.join(project_dir, 'thumbnail.jpg')
+        shutil.copy2(imagen_path, thumb_path)
+
+        # Actualizar metadata
+        meta['imagen_nombre'] = imagen_filename
+        meta['imagen_ext'] = ext
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        self._enviar_json({'ok': True})
 
     def _eliminar_proyecto(self, project_id):
         """DELETE /api/projects/<id> - Elimina un proyecto"""

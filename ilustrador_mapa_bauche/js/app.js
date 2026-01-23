@@ -378,6 +378,36 @@ async function renombrarProyecto() {
     }
 }
 
+// ==================== CAMBIAR IMAGEN ====================
+
+async function cambiarImagenProyecto(archivo) {
+    if (!AppState.proyectoActual) return;
+
+    try {
+        const formData = new FormData();
+        formData.append('imagen', archivo);
+
+        const response = await fetch(`/api/projects/${AppState.proyectoActual}/image`, {
+            method: 'PUT',
+            body: formData
+        });
+
+        if (!response.ok) {
+            mostrarNotificacion('Error al subir imagen', 'error');
+            return;
+        }
+
+        // Recargar imagen en el canvas (los trazos se mantienen)
+        const imagenUrl = ProjectManager.obtenerImagenURL(AppState.proyectoActual) + '?t=' + Date.now();
+        await cargarImagenProyecto(imagenUrl);
+
+        mostrarNotificacion('Imagen actualizada', 'success');
+    } catch (error) {
+        console.error('Error al cambiar imagen:', error);
+        mostrarNotificacion('Error al cambiar imagen', 'error');
+    }
+}
+
 // ==================== EVENTOS DEL EDITOR ====================
 
 let editorEventsSetup = false;
@@ -420,6 +450,14 @@ function setupUIEvents() {
     // Busqueda de lotes
     document.getElementById('buscar-lote')?.addEventListener('input', (e) => {
         buscarLotes(e.target.value);
+    });
+
+    // Cambiar imagen del proyecto
+    document.getElementById('input-imagen')?.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            cambiarImagenProyecto(e.target.files[0]);
+            e.target.value = ''; // reset para permitir seleccionar el mismo archivo
+        }
     });
 
     // Importar base de datos
