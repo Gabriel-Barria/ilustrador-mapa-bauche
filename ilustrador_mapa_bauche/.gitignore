@@ -13,9 +13,11 @@ Thumbs.db
 *.bak
 *~
 
-# SQLite database (user data, not tracked)
-data/*.sqlite
-data/*.db
+# Project data (user-generated, not tracked)
+data/
+
+# Claude Code
+.claude/
 
 # Logs
 *.log

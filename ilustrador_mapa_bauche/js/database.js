@@ -5,20 +5,27 @@
 
 /**
  * Inicializa la base de datos SQLite
+ * @param {ArrayBuffer|null} datosGuardados - BD guardada previamente (opcional)
  */
-async function initDatabase() {
+async function initDatabase(datosGuardados) {
     // Cargar sql.js
     const SQL = await initSqlJs({
         locateFile: file => `lib/${file}`
     });
 
-    // Crear nueva base de datos
-    AppState.db = new SQL.Database();
+    if (datosGuardados) {
+        // Restaurar BD desde datos guardados
+        AppState.db = new SQL.Database(new Uint8Array(datosGuardados));
+        console.log('Base de datos restaurada desde proyecto');
 
-    // Crear esquema
-    crearEsquema();
-
-    console.log('SQLite inicializado correctamente');
+        // Asegurar que las tablas nuevas existan (por si la BD es de version anterior)
+        crearEsquema();
+    } else {
+        // Crear nueva base de datos
+        AppState.db = new SQL.Database();
+        crearEsquema();
+        console.log('Nueva base de datos creada');
+    }
 }
 
 /**
@@ -74,6 +81,20 @@ function crearEsquema() {
         CREATE TABLE IF NOT EXISTS configuracion (
             clave TEXT PRIMARY KEY,
             valor TEXT
+        )
+    `);
+
+    // Tabla de lineas divisorias
+    db.run(`
+        CREATE TABLE IF NOT EXISTS lineas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            punto_inicio_x REAL NOT NULL,
+            punto_inicio_y REAL NOT NULL,
+            punto_fin_x REAL NOT NULL,
+            punto_fin_y REAL NOT NULL,
+            color TEXT DEFAULT '#8B0000',
+            grosor REAL DEFAULT 2,
+            fecha_creacion TEXT DEFAULT (datetime('now'))
         )
     `);
 }
@@ -248,6 +269,58 @@ function obtenerPoligonos() {
 function eliminarPoligono(id) {
     const db = AppState.db;
     db.run('DELETE FROM poligonos WHERE id = ?', [id]);
+}
+
+/**
+ * CRUD para lineas divisorias
+ */
+function crearLinea(datos) {
+    const db = AppState.db;
+    db.run(`
+        INSERT INTO lineas (punto_inicio_x, punto_inicio_y, punto_fin_x, punto_fin_y, color, grosor)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+        datos.punto_inicio_x,
+        datos.punto_inicio_y,
+        datos.punto_fin_x,
+        datos.punto_fin_y,
+        datos.color || '#8B0000',
+        datos.grosor || 2
+    ]);
+
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    return result[0].values[0][0];
+}
+
+function obtenerLineas() {
+    const db = AppState.db;
+    const result = db.exec('SELECT * FROM lineas');
+
+    if (!result[0]) return [];
+
+    const columns = result[0].columns;
+    return result[0].values.map(row => {
+        const obj = {};
+        columns.forEach((col, i) => obj[col] = row[i]);
+        return obj;
+    });
+}
+
+function actualizarLinea(id, datos) {
+    const db = AppState.db;
+    db.run(`
+        UPDATE lineas SET
+            punto_inicio_x = ?,
+            punto_inicio_y = ?,
+            punto_fin_x = ?,
+            punto_fin_y = ?
+        WHERE id = ?
+    `, [datos.punto_inicio_x, datos.punto_inicio_y, datos.punto_fin_x, datos.punto_fin_y, id]);
+}
+
+function eliminarLinea(id) {
+    const db = AppState.db;
+    db.run('DELETE FROM lineas WHERE id = ?', [id]);
 }
 
 /**

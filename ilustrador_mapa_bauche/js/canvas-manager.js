@@ -15,11 +15,31 @@ let isPanning = false;
 let lastPosX = 0;
 let lastPosY = 0;
 
+// Estado de dibujo de lineas
+let isDrawingLine = false;
+let lineStartPoint = null;
+let lineaTemporalLinea = null;
+
 /**
  * Inicializa el canvas de Fabric.js
  */
 function initCanvas() {
     const container = document.getElementById('canvas-container');
+
+    // Si ya hay un canvas, eliminar el wrapper creado por Fabric
+    const existingWrapper = container.querySelector('.canvas-container');
+    if (existingWrapper) {
+        existingWrapper.remove();
+    }
+
+    // Recrear el elemento canvas
+    const existingCanvas = container.querySelector('#canvas-principal');
+    if (existingCanvas) {
+        existingCanvas.remove();
+    }
+    const canvasEl = document.createElement('canvas');
+    canvasEl.id = 'canvas-principal';
+    container.appendChild(canvasEl);
 
     // Obtener dimensiones del contenedor
     const width = container.clientWidth;
@@ -47,77 +67,79 @@ function initCanvas() {
     canvas.on('selection:updated', onObjectSelected);
     canvas.on('selection:cleared', onSelectionCleared);
 
-    // Responsive
+    // Responsive (remove previous to avoid stacking)
+    window.removeEventListener('resize', ajustarTamanoCanvas);
     window.addEventListener('resize', ajustarTamanoCanvas);
 
-    // Cargar imagen por defecto
-    cargarImagenPorDefecto();
+    // Prevenir menu contextual en el canvas (usamos right-click para pan)
+    canvas.upperCanvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
     console.log('Canvas Fabric.js inicializado');
 }
 
 /**
- * Carga la imagen ORIGINAL automaticamente (sin los textos de Paint)
+ * Carga la imagen del proyecto en el canvas
+ * @param {string} url - URL de la imagen (blob URL o ruta)
  */
-function cargarImagenPorDefecto() {
-    const rutaImagen = 'assets/20251111_201421.jpg';
+function cargarImagenProyecto(url) {
+    return new Promise((resolve, reject) => {
+        fabric.Image.fromURL(url, function(img) {
+            if (!img || img.width === 0) {
+                console.log('No se pudo cargar la imagen');
+                reject(new Error('No se pudo cargar la imagen'));
+                return;
+            }
 
-    fabric.Image.fromURL(rutaImagen, function(img) {
-        if (!img || img.width === 0) {
-            console.log('No se pudo cargar la imagen por defecto');
-            return;
-        }
+            const canvas = AppState.canvas;
 
-        const canvas = AppState.canvas;
+            // Remover imagen anterior si existe
+            if (AppState.imagenFondo) {
+                canvas.remove(AppState.imagenFondo);
+            }
 
-        // Guardar dimensiones originales
-        dimensionesOriginales.width = img.width;
-        dimensionesOriginales.height = img.height;
+            // Guardar dimensiones originales
+            dimensionesOriginales.width = img.width;
+            dimensionesOriginales.height = img.height;
 
-        // Agregar imagen como objeto (no como fondo) para mejor control
-        img.set({
-            left: 0,
-            top: 0,
-            selectable: false,
-            evented: false,
-            hoverCursor: 'default'
-        });
+            // Agregar imagen como objeto (no como fondo) para mejor control
+            img.set({
+                left: 0,
+                top: 0,
+                selectable: false,
+                evented: false,
+                hoverCursor: 'default'
+            });
 
-        canvas.add(img);
-        canvas.sendToBack(img);
+            canvas.add(img);
+            canvas.sendToBack(img);
 
-        // Guardar referencia
-        AppState.imagenFondo = img;
+            // Guardar referencia
+            AppState.imagenFondo = img;
 
-        // Ajustar zoom para ver toda la imagen
-        const escalaX = canvas.width / img.width;
-        const escalaY = canvas.height / img.height;
-        const escala = Math.min(escalaX, escalaY) * 0.95;
+            // Ajustar zoom para ver toda la imagen
+            const escalaX = canvas.width / img.width;
+            const escalaY = canvas.height / img.height;
+            const escala = Math.min(escalaX, escalaY) * 0.95;
 
-        canvas.setZoom(escala);
+            canvas.setZoom(escala);
 
-        // Centrar la imagen
-        const vpw = canvas.width / escala;
-        const vph = canvas.height / escala;
-        const offsetX = (vpw - img.width) / 2;
-        const offsetY = (vph - img.height) / 2;
+            // Centrar la imagen
+            const vpw = canvas.width / escala;
+            const vph = canvas.height / escala;
+            const offsetX = (vpw - img.width) / 2;
+            const offsetY = (vph - img.height) / 2;
 
-        canvas.absolutePan({ x: -offsetX * escala, y: -offsetY * escala });
+            canvas.absolutePan({ x: -offsetX * escala, y: -offsetY * escala });
 
-        // Ocultar placeholder
-        document.getElementById('canvas-placeholder')?.classList.add('hidden');
+            AppState.imagenCargada = true;
+            actualizarZoomUI(escala);
 
-        AppState.imagenCargada = true;
-        actualizarZoomUI(escala);
+            canvas.renderAll();
+            mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
 
-        canvas.renderAll();
-        mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
-
-        // Cargar datos iniciales después de que la imagen esté lista
-        if (typeof cargarDatosIniciales === 'function') {
-            setTimeout(() => cargarDatosIniciales(), 500);
-        }
-    }, { crossOrigin: 'anonymous' });
+            resolve();
+        }, { crossOrigin: 'anonymous' });
+    });
 }
 
 /**
@@ -134,59 +156,6 @@ function ajustarTamanoCanvas() {
     canvas.renderAll();
 }
 
-/**
- * Carga una imagen desde archivo como fondo del canvas
- */
-function cargarImagenFondo(archivo) {
-    const reader = new FileReader();
-
-    reader.onload = function(event) {
-        fabric.Image.fromURL(event.target.result, function(img) {
-            const canvas = AppState.canvas;
-
-            // Remover imagen anterior si existe
-            if (AppState.imagenFondo) {
-                canvas.remove(AppState.imagenFondo);
-            }
-
-            // Guardar dimensiones originales
-            dimensionesOriginales.width = img.width;
-            dimensionesOriginales.height = img.height;
-
-            // Agregar imagen como objeto
-            img.set({
-                left: 0,
-                top: 0,
-                selectable: false,
-                evented: false,
-                hoverCursor: 'default'
-            });
-
-            canvas.add(img);
-            canvas.sendToBack(img);
-            AppState.imagenFondo = img;
-
-            // Ajustar zoom para ver toda la imagen
-            const escalaX = canvas.width / img.width;
-            const escalaY = canvas.height / img.height;
-            const escala = Math.min(escalaX, escalaY) * 0.95;
-
-            canvas.setZoom(escala);
-            canvas.absolutePan({ x: 0, y: 0 });
-
-            // Ocultar placeholder
-            document.getElementById('canvas-placeholder')?.classList.add('hidden');
-
-            AppState.imagenCargada = true;
-            actualizarZoomUI(escala);
-
-            canvas.renderAll();
-            mostrarNotificacion('Imagen cargada: ' + img.width + 'x' + img.height + ' px', 'success');
-        });
-    };
-
-    reader.readAsDataURL(archivo);
-}
 
 /**
  * Configura el modo del canvas segun la herramienta seleccionada
@@ -200,13 +169,18 @@ function setCanvasMode(modo) {
         cancelarPoligono();
     }
 
+    // Limpiar linea en construccion si cambiamos de modo
+    if (modo !== 'line' && isDrawingLine) {
+        cancelarLineaEnProgreso();
+    }
+
     switch (modo) {
         case 'select':
             canvas.selection = true;
             canvas.defaultCursor = 'default';
             canvas.hoverCursor = 'move';
             canvas.forEachObject(obj => {
-                if (obj.type === 'i-text') {
+                if (obj.type === 'i-text' || obj.esLineaDivisoria) {
                     obj.selectable = true;
                     obj.evented = true;
                 }
@@ -239,6 +213,17 @@ function setCanvasMode(modo) {
             canvas.selection = false;
             canvas.defaultCursor = 'grab';
             canvas.hoverCursor = 'grab';
+            canvas.forEachObject(obj => {
+                if (obj !== AppState.imagenFondo) {
+                    obj.selectable = false;
+                }
+            });
+            break;
+
+        case 'line':
+            canvas.selection = false;
+            canvas.defaultCursor = 'crosshair';
+            canvas.hoverCursor = 'crosshair';
             canvas.forEachObject(obj => {
                 if (obj !== AppState.imagenFondo) {
                     obj.selectable = false;
@@ -302,6 +287,11 @@ function onMouseMove(options) {
     if (AppState.modoActual === 'polygon' && puntosPoligono.length > 0) {
         actualizarLineaTemporalPoligono(pointer);
     }
+
+    // Si estamos dibujando linea, mostrar preview
+    if (AppState.modoActual === 'line' && isDrawingLine && lineStartPoint) {
+        actualizarLineaTemporalDivision(pointer);
+    }
 }
 
 /**
@@ -354,6 +344,10 @@ function onMouseDown(options) {
         case 'polygon':
             agregarPuntoPoligono(pointer, options.e);
             break;
+
+        case 'line':
+            manejarClickLinea(pointer);
+            break;
     }
 }
 
@@ -377,7 +371,6 @@ function onObjectModified(options) {
     const obj = options.target;
 
     if (obj && obj.textoId) {
-        // Guardar nueva posicion del texto
         actualizarTexto(obj.textoId, {
             contenido: obj.text,
             pos_x: obj.left,
@@ -386,9 +379,30 @@ function onObjectModified(options) {
             color: obj.fill,
             angulo: obj.angle
         });
-
         AppState.cambiosSinGuardar = true;
     }
+
+    if (obj && obj.lineaId && obj.esLineaDivisoria) {
+        const coords = obtenerCoordenadasLinea(obj);
+        actualizarLinea(obj.lineaId, coords);
+        AppState.cambiosSinGuardar = true;
+    }
+}
+
+/**
+ * Calcula las coordenadas absolutas de una linea despues de moverla/escalarla
+ */
+function obtenerCoordenadasLinea(lineaObj) {
+    const matrix = lineaObj.calcTransformMatrix();
+    const points = lineaObj.calcLinePoints();
+    const p1 = fabric.util.transformPoint(new fabric.Point(points.x1, points.y1), matrix);
+    const p2 = fabric.util.transformPoint(new fabric.Point(points.x2, points.y2), matrix);
+    return {
+        punto_inicio_x: p1.x,
+        punto_inicio_y: p1.y,
+        punto_fin_x: p2.x,
+        punto_fin_y: p2.y
+    };
 }
 
 /**
@@ -786,15 +800,188 @@ async function cargarTodosLosElementos() {
         canvas.add(poligono);
     });
 
+    // Cargar lineas divisorias
+    if (typeof obtenerLineas === 'function') {
+        const lineas = obtenerLineas();
+        lineas.forEach(l => {
+            const linea = new fabric.Line(
+                [l.punto_inicio_x, l.punto_inicio_y, l.punto_fin_x, l.punto_fin_y],
+                {
+                    stroke: l.color || '#8B0000',
+                    strokeWidth: l.grosor || 2,
+                    selectable: true,
+                    evented: true,
+                    hoverCursor: 'pointer',
+                    lineaId: l.id,
+                    esLineaDivisoria: true
+                }
+            );
+            canvas.add(linea);
+        });
+    }
+
     canvas.renderAll();
 }
 
 /**
- * Guarda el estado actual
+ * Guarda el estado actual: sincroniza posiciones del canvas a la BD
  */
 function guardarEstadoActual() {
     const canvas = AppState.canvas;
     if (!canvas) return;
 
-    console.log('Estado guardado');
+    canvas.getObjects().forEach(obj => {
+        if (obj.textoId) {
+            actualizarTexto(obj.textoId, {
+                contenido: obj.text,
+                pos_x: obj.left,
+                pos_y: obj.top,
+                font_size: obj.fontSize,
+                color: obj.fill,
+                angulo: obj.angle || 0
+            });
+        }
+
+        if (obj.lineaId && obj.esLineaDivisoria) {
+            const coords = obtenerCoordenadasLinea(obj);
+            actualizarLinea(obj.lineaId, coords);
+        }
+    });
+
+    console.log('Estado sincronizado con BD');
+}
+
+/**
+ * Maneja el click para dibujar lineas divisorias
+ */
+function manejarClickLinea(pointer) {
+    const canvas = AppState.canvas;
+
+    if (!isDrawingLine) {
+        // Primer click: iniciar linea
+        isDrawingLine = true;
+        lineStartPoint = { x: pointer.x, y: pointer.y };
+
+        // Dibujar punto de inicio
+        const puntoSize = Math.max(4, dimensionesOriginales.width / 500);
+        const puntoInicio = new fabric.Circle({
+            left: pointer.x - puntoSize,
+            top: pointer.y - puntoSize,
+            radius: puntoSize,
+            fill: '#FF0000',
+            selectable: false,
+            evented: false,
+            puntoLineaTemporal: true
+        });
+        canvas.add(puntoInicio);
+        canvas.renderAll();
+
+        mostrarNotificacion('Click en otro punto para completar la linea divisoria', 'info');
+    } else {
+        // Segundo click: completar linea
+        finalizarLineaDivisoria(pointer);
+    }
+}
+
+/**
+ * Actualiza la linea temporal mientras se mueve el mouse
+ */
+function actualizarLineaTemporalDivision(pointer) {
+    const canvas = AppState.canvas;
+
+    // Remover linea temporal anterior
+    if (lineaTemporalLinea) {
+        canvas.remove(lineaTemporalLinea);
+    }
+
+    // Crear nueva linea temporal
+    lineaTemporalLinea = new fabric.Line(
+        [lineStartPoint.x, lineStartPoint.y, pointer.x, pointer.y],
+        {
+            stroke: '#FF0000',
+            strokeWidth: Math.max(2, dimensionesOriginales.width / 800),
+            strokeDashArray: [5, 5],
+            selectable: false,
+            evented: false
+        }
+    );
+    canvas.add(lineaTemporalLinea);
+    canvas.renderAll();
+}
+
+/**
+ * Finaliza la linea divisoria
+ */
+function finalizarLineaDivisoria(pointer) {
+    const canvas = AppState.canvas;
+
+    // Guardar estado para undo
+    if (typeof UndoManager !== 'undefined') {
+        UndoManager.guardarEstado();
+    }
+
+    // Remover elementos temporales
+    canvas.getObjects().filter(o => o.puntoLineaTemporal).forEach(o => canvas.remove(o));
+    if (lineaTemporalLinea) {
+        canvas.remove(lineaTemporalLinea);
+        lineaTemporalLinea = null;
+    }
+
+    // Crear linea final
+    const strokeWidth = Math.max(2, dimensionesOriginales.width / 800);
+    const linea = new fabric.Line(
+        [lineStartPoint.x, lineStartPoint.y, pointer.x, pointer.y],
+        {
+            stroke: '#8B0000', // Rojo oscuro para divisiones
+            strokeWidth: strokeWidth,
+            selectable: true,
+            evented: true,
+            hoverCursor: 'pointer',
+            esLineaDivisoria: true
+        }
+    );
+
+    canvas.add(linea);
+
+    // Guardar en BD si existe la funcion
+    if (typeof crearLinea === 'function') {
+        const lineaId = crearLinea({
+            punto_inicio_x: lineStartPoint.x,
+            punto_inicio_y: lineStartPoint.y,
+            punto_fin_x: pointer.x,
+            punto_fin_y: pointer.y,
+            color: '#8B0000',
+            grosor: strokeWidth
+        });
+        linea.lineaId = lineaId;
+    }
+
+    // Limpiar estado
+    isDrawingLine = false;
+    lineStartPoint = null;
+
+    AppState.cambiosSinGuardar = true;
+    canvas.renderAll();
+
+    mostrarNotificacion('Linea divisoria agregada', 'success');
+}
+
+/**
+ * Cancela la linea en progreso
+ */
+function cancelarLineaEnProgreso() {
+    const canvas = AppState.canvas;
+    if (!canvas) return;
+
+    // Remover elementos temporales
+    canvas.getObjects().filter(o => o.puntoLineaTemporal).forEach(o => canvas.remove(o));
+    if (lineaTemporalLinea) {
+        canvas.remove(lineaTemporalLinea);
+        lineaTemporalLinea = null;
+    }
+
+    isDrawingLine = false;
+    lineStartPoint = null;
+
+    canvas.renderAll();
 }

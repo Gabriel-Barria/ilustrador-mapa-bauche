@@ -196,3 +196,53 @@ function exportarCSV() {
 
     mostrarNotificacion('CSV exportado', 'success');
 }
+
+/**
+ * Exporta los lotes a formato Excel (.xlsx) usando SheetJS
+ */
+function exportarLotesExcel() {
+    if (typeof XLSX === 'undefined') {
+        mostrarNotificacion('Libreria Excel no disponible', 'error');
+        return;
+    }
+
+    const lotes = obtenerLotes();
+
+    if (lotes.length === 0) {
+        mostrarNotificacion('No hay lotes para exportar', 'error');
+        return;
+    }
+
+    // Preparar datos para la hoja
+    const datos = lotes.map(lote => ({
+        'Nombre Propietario': lote.nombre_propietario,
+        'Telefono': lote.telefono || '',
+        'Numero de Rol': lote.rol_propiedad || '',
+        'Tipo': lote.es_oficial === 1 ? 'Oficial' : 'Agregado',
+        'Notas': lote.notas || ''
+    }));
+
+    // Crear workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(datos);
+
+    // Ajustar ancho de columnas
+    ws['!cols'] = [
+        { wch: 30 }, // Nombre
+        { wch: 15 }, // Telefono
+        { wch: 15 }, // Rol
+        { wch: 12 }, // Tipo
+        { wch: 30 }  // Notas
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Lotes');
+
+    // Descargar
+    const fecha = new Date().toISOString().split('T')[0];
+    const nombreProyecto = document.getElementById('editor-titulo')?.textContent || 'proyecto';
+    const nombreArchivo = `lotes_${nombreProyecto.replace(/\s+/g, '_')}_${fecha}.xlsx`;
+
+    XLSX.writeFile(wb, nombreArchivo);
+
+    mostrarNotificacion(`Excel exportado: ${lotes.length} lotes`, 'success');
+}

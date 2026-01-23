@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Proyecto</title>
+    <link rel="stylesheet" href="css/viewer.css">
+</head>
+<body>
+    <!-- Header -->
+    <header id="viewer-header">
+        <h1 id="viewer-titulo">Cargando proyecto...</h1>
+        <div class="viewer-actions">
+            <button id="btn-exportar-png-viewer" class="viewer-header-btn" title="Exportar imagen PNG">&#128247; PNG</button>
+            <button id="btn-exportar-excel-viewer" class="viewer-header-btn" title="Exportar lotes a Excel">&#128196; Excel</button>
+            <span class="viewer-separator"></span>
+            <span id="viewer-lotes">0 lotes</span>
+            <span id="viewer-sync" class="sync-indicator">&#9679; Sincronizado</span>
+        </div>
+    </header>
+
+    <!-- Canvas -->
+    <main id="viewer-canvas-container">
+        <canvas id="viewer-canvas"></canvas>
+    </main>
+
+    <!-- Zoom controls -->
+    <div id="viewer-zoom-controls">
+        <button id="viewer-zoom-out" class="viewer-btn">-</button>
+        <span id="viewer-zoom-level">100%</span>
+        <button id="viewer-zoom-in" class="viewer-btn">+</button>
+        <button id="viewer-zoom-fit" class="viewer-btn">Ajustar</button>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="viewer-tooltip" class="viewer-tooltip">
+        <div class="tooltip-content"></div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="modal-detalle-lote" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="detalle-titulo">Detalle del Lote</h2>
+            <div id="detalle-contenido"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn" id="btn-cerrar-detalle">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="viewer-error" class="hidden">
+        <h2>Proyecto no encontrado</h2>
+        <p>El enlace puede haber expirado o ser invalido.</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="lib/fabric.min.js"></script>
+    <script src="lib/sql-wasm.js"></script>
+    <script src="lib/xlsx.min.js"></script>
+    <script src="js/viewer.js"></script>
+</body>
+</html>
