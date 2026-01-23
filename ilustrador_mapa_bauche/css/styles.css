@@ -276,6 +276,14 @@ body:has(#editor-view:not(.hidden)) {
 #editor-titulo {
     font-size: 18px;
     font-weight: 600;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+#editor-titulo:hover {
+    background-color: rgba(255,255,255,0.1);
 }
 
 .toolbar-actions {

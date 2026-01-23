@@ -348,6 +348,36 @@ async function volverAProyectos() {
     await renderizarProyectos();
 }
 
+// ==================== RENOMBRAR PROYECTO ====================
+
+async function renombrarProyecto() {
+    if (!AppState.proyectoActual) return;
+
+    const tituloEl = document.getElementById('editor-titulo');
+    const nombreActual = tituloEl.textContent;
+    const nuevoNombre = prompt('Nombre del proyecto:', nombreActual);
+
+    if (!nuevoNombre || nuevoNombre.trim() === '' || nuevoNombre.trim() === nombreActual) return;
+
+    try {
+        const response = await fetch(`/api/projects/${AppState.proyectoActual}/metadata`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: nuevoNombre.trim() })
+        });
+
+        if (response.ok) {
+            tituloEl.textContent = nuevoNombre.trim();
+            mostrarNotificacion('Proyecto renombrado', 'success');
+        } else {
+            mostrarNotificacion('Error al renombrar', 'error');
+        }
+    } catch (error) {
+        console.error('Error al renombrar:', error);
+        mostrarNotificacion('Error al renombrar', 'error');
+    }
+}
+
 // ==================== EVENTOS DEL EDITOR ====================
 
 let editorEventsSetup = false;
@@ -358,6 +388,9 @@ function setupUIEvents() {
 
     // Boton volver
     document.getElementById('btn-volver')?.addEventListener('click', volverAProyectos);
+
+    // Click en titulo para renombrar proyecto
+    document.getElementById('editor-titulo')?.addEventListener('click', renombrarProyecto);
 
     // Botones de herramientas
     document.querySelectorAll('.tool-btn').forEach(btn => {
