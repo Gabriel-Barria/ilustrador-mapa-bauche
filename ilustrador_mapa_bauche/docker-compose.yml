@@ -4,7 +4,10 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - editor-data:/app/data
     environment:
       - DOCKER=1
     restart: unless-stopped
+
+volumes:
+  editor-data:
