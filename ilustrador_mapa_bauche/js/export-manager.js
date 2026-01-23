@@ -15,6 +15,10 @@ function exportarPNG() {
 
     // Deseleccionar objetos para limpiar handles de seleccion
     canvas.discardActiveObject();
+
+    // Guardar viewport actual y resetear a identidad para exportar sin zoom/pan
+    const vpt = canvas.viewportTransform.slice();
+    canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
     canvas.renderAll();
 
     // Exportar solo el area de la imagen de fondo a resolucion original
@@ -32,6 +36,10 @@ function exportarPNG() {
     }
 
     const dataURL = canvas.toDataURL(exportOpts);
+
+    // Restaurar viewport
+    canvas.viewportTransform = vpt;
+    canvas.renderAll();
 
     // Crear enlace de descarga
     const fecha = new Date().toISOString().split('T')[0];
@@ -99,6 +107,10 @@ function imprimirCanvas() {
 
     // Deseleccionar objetos
     canvas.discardActiveObject();
+
+    // Resetear viewport para exportar sin zoom/pan
+    const vpt = canvas.viewportTransform.slice();
+    canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
     canvas.renderAll();
 
     // Crear ventana de impresion (recortada al area de la imagen)
@@ -110,6 +122,10 @@ function imprimirCanvas() {
         printOpts.height = AppState.imagenFondo.height;
     }
     const dataURL = canvas.toDataURL(printOpts);
+
+    // Restaurar viewport
+    canvas.viewportTransform = vpt;
+    canvas.renderAll();
 
     const ventana = window.open('', '_blank');
     ventana.document.write(`

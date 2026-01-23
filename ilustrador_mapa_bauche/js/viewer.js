@@ -630,6 +630,10 @@ function exportarPNGViewer() {
     if (!canvas) return;
 
     canvas.discardActiveObject();
+
+    // Resetear viewport para exportar sin zoom/pan
+    const vpt = canvas.viewportTransform.slice();
+    canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
     canvas.renderAll();
 
     // Exportar solo el area de la imagen de fondo a resolucion original
@@ -647,6 +651,10 @@ function exportarPNGViewer() {
     }
 
     const dataURL = canvas.toDataURL(exportOpts);
+
+    // Restaurar viewport
+    canvas.viewportTransform = vpt;
+    canvas.renderAll();
 
     const fecha = new Date().toISOString().split('T')[0];
     const nombre = document.getElementById('viewer-titulo').textContent || 'proyecto';
