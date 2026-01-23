@@ -93,6 +93,8 @@ function initViewerCanvas() {
     // Pan with drag (mouse + touch)
     let isPanning = false;
     let lastPosX, lastPosY;
+    let panStartX, panStartY;
+    let panMoved = false;
 
     function getEventPos(e) {
         if (e.touches && e.touches.length > 0) {
@@ -105,12 +107,14 @@ function initViewerCanvas() {
     }
 
     canvas.on('mouse:down', (opt) => {
-        // No pan if pinching (2 fingers)
         if (opt.e.touches && opt.e.touches.length > 1) return;
         isPanning = true;
+        panMoved = false;
         const pos = getEventPos(opt.e);
         lastPosX = pos.x;
         lastPosY = pos.y;
+        panStartX = pos.x;
+        panStartY = pos.y;
         canvas.defaultCursor = 'grabbing';
     });
 
@@ -118,6 +122,11 @@ function initViewerCanvas() {
         if (!isPanning) return;
         if (opt.e.touches && opt.e.touches.length > 1) return;
         const pos = getEventPos(opt.e);
+        const dx = pos.x - panStartX;
+        const dy = pos.y - panStartY;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            panMoved = true;
+        }
         const vpt = canvas.viewportTransform;
         vpt[4] += pos.x - lastPosX;
         vpt[5] += pos.y - lastPosY;
@@ -126,9 +135,16 @@ function initViewerCanvas() {
         lastPosY = pos.y;
     });
 
-    canvas.on('mouse:up', () => {
+    canvas.on('mouse:up', (opt) => {
+        const wasTap = !panMoved;
         isPanning = false;
+        panMoved = false;
         canvas.defaultCursor = 'grab';
+
+        // If it was a tap (no drag), check if target has loteId
+        if (wasTap && opt.target && opt.target.loteId) {
+            mostrarDetalleLote(opt.target.loteId);
+        }
     });
 
     canvas.upperCanvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -408,33 +424,29 @@ function iniciarPolling() {
 
 function setupInteracciones() {
     const canvas = ViewerState.canvas;
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-    // Tooltip on hover
-    canvas.on('mouse:over', (opt) => {
-        if (opt.target && opt.target.loteId) {
-            mostrarTooltipViewer(opt.target.loteId, opt.e);
-        }
-    });
+    // Tooltip solo en desktop (hover no existe en mobile)
+    if (!isTouchDevice) {
+        canvas.on('mouse:over', (opt) => {
+            if (opt.target && opt.target.loteId) {
+                mostrarTooltipViewer(opt.target.loteId, opt.e);
+            }
+        });
 
-    canvas.on('mouse:out', (opt) => {
-        if (opt.target && opt.target.loteId) {
+        canvas.on('mouse:out', () => {
             ocultarTooltipViewer();
-        }
-    });
+        });
 
-    canvas.on('mouse:move', (opt) => {
-        const tooltip = document.getElementById('viewer-tooltip');
-        if (tooltip.classList.contains('visible')) {
-            posicionarTooltipViewer(opt.e);
-        }
-    });
+        canvas.on('mouse:move', (opt) => {
+            const tooltip = document.getElementById('viewer-tooltip');
+            if (tooltip.classList.contains('visible')) {
+                posicionarTooltipViewer(opt.e);
+            }
+        });
+    }
 
-    // Detail modal on click
-    canvas.on('mouse:down', (opt) => {
-        if (opt.target && opt.target.loteId && opt.e.button === 0) {
-            mostrarDetalleLote(opt.target.loteId);
-        }
-    });
+    // El modal se activa desde mouse:up en initViewerCanvas (tap sin arrastre)
 
     // Close modal
     document.getElementById('btn-cerrar-detalle')?.addEventListener('click', () => {
