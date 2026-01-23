@@ -17,12 +17,21 @@ function exportarPNG() {
     canvas.discardActiveObject();
     canvas.renderAll();
 
-    // Exportar con mayor calidad
-    const dataURL = canvas.toDataURL({
-        format: 'png',
-        quality: 1,
-        multiplier: 2 // 2x resolucion
-    });
+    // Exportar solo el area de la imagen de fondo a resolucion original
+    const exportOpts = { format: 'png', quality: 1 };
+
+    if (AppState.imagenFondo) {
+        const img = AppState.imagenFondo;
+        exportOpts.left = 0;
+        exportOpts.top = 0;
+        exportOpts.width = img.width;
+        exportOpts.height = img.height;
+        exportOpts.multiplier = 2;
+    } else {
+        exportOpts.multiplier = 2;
+    }
+
+    const dataURL = canvas.toDataURL(exportOpts);
 
     // Crear enlace de descarga
     const fecha = new Date().toISOString().split('T')[0];
@@ -92,12 +101,15 @@ function imprimirCanvas() {
     canvas.discardActiveObject();
     canvas.renderAll();
 
-    // Crear ventana de impresion
-    const dataURL = canvas.toDataURL({
-        format: 'png',
-        quality: 1,
-        multiplier: 2
-    });
+    // Crear ventana de impresion (recortada al area de la imagen)
+    const printOpts = { format: 'png', quality: 1, multiplier: 2 };
+    if (AppState.imagenFondo) {
+        printOpts.left = 0;
+        printOpts.top = 0;
+        printOpts.width = AppState.imagenFondo.width;
+        printOpts.height = AppState.imagenFondo.height;
+    }
+    const dataURL = canvas.toDataURL(printOpts);
 
     const ventana = window.open('', '_blank');
     ventana.document.write(`

@@ -632,11 +632,21 @@ function exportarPNGViewer() {
     canvas.discardActiveObject();
     canvas.renderAll();
 
-    const dataURL = canvas.toDataURL({
-        format: 'png',
-        quality: 1,
-        multiplier: 2
-    });
+    // Exportar solo el area de la imagen de fondo a resolucion original
+    const exportOpts = { format: 'png', quality: 1 };
+
+    if (ViewerState.imagenFondo) {
+        const img = ViewerState.imagenFondo;
+        exportOpts.left = 0;
+        exportOpts.top = 0;
+        exportOpts.width = img.width;
+        exportOpts.height = img.height;
+        exportOpts.multiplier = 2;
+    } else {
+        exportOpts.multiplier = 2;
+    }
+
+    const dataURL = canvas.toDataURL(exportOpts);
 
     const fecha = new Date().toISOString().split('T')[0];
     const nombre = document.getElementById('viewer-titulo').textContent || 'proyecto';
