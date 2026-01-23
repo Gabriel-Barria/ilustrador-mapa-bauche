@@ -95,7 +95,8 @@ function initViewerCanvas() {
     let lastPosX, lastPosY;
     let panStartX, panStartY;
     let panMoved = false;
-    let tapTarget = null;
+    let tapPointer = null; // canvas coordinates of tap start
+    let isPinching = false;
 
     function getEventPos(e) {
         if (e.touches && e.touches.length > 0) {
@@ -107,11 +108,41 @@ function initViewerCanvas() {
         return { x: e.clientX, y: e.clientY };
     }
 
+    // Find object with loteId at given canvas coordinates
+    function findLoteAtPoint(canvasPoint) {
+        const objects = canvas.getObjects();
+        const tolerance = 15 / canvas.getZoom(); // bigger tolerance at lower zoom
+        for (let i = objects.length - 1; i >= 0; i--) {
+            const obj = objects[i];
+            if (!obj.loteId) continue;
+            // Ensure coords are up-to-date after viewport changes
+            obj.setCoords();
+            const coords = obj.aCoords;
+            if (!coords) continue;
+            // Build bounding box from corner coords (handles rotation)
+            const xs = [coords.tl.x, coords.tr.x, coords.bl.x, coords.br.x];
+            const ys = [coords.tl.y, coords.tr.y, coords.bl.y, coords.br.y];
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            if (canvasPoint.x >= minX - tolerance &&
+                canvasPoint.x <= maxX + tolerance &&
+                canvasPoint.y >= minY - tolerance &&
+                canvasPoint.y <= maxY + tolerance) {
+                return obj;
+            }
+        }
+        return null;
+    }
+
     canvas.on('mouse:down', (opt) => {
         if (opt.e.touches && opt.e.touches.length > 1) return;
         isPanning = true;
         panMoved = false;
-        tapTarget = opt.target || null;
+        isPinching = false;
+        // Store pointer in canvas coordinates for later hit-test
+        tapPointer = canvas.getPointer(opt.e);
         const pos = getEventPos(opt.e);
         lastPosX = pos.x;
         lastPosY = pos.y;
@@ -138,16 +169,19 @@ function initViewerCanvas() {
     });
 
     canvas.on('mouse:up', () => {
-        const wasTap = !panMoved;
+        const wasTap = !panMoved && !isPinching;
         isPanning = false;
         panMoved = false;
         canvas.defaultCursor = 'grab';
 
-        // If it was a tap (no drag), show modal
-        if (wasTap && tapTarget && tapTarget.loteId) {
-            mostrarDetalleLote(tapTarget.loteId);
+        // If it was a tap (no drag, no pinch), find object at tap point
+        if (wasTap && tapPointer) {
+            const obj = findLoteAtPoint(tapPointer);
+            if (obj && obj.loteId) {
+                mostrarDetalleLote(obj.loteId);
+            }
         }
-        tapTarget = null;
+        tapPointer = null;
     });
 
     canvas.upperCanvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -159,6 +193,8 @@ function initViewerCanvas() {
     canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
+            isPinching = true;
+            panMoved = true; // prevent tap detection after pinch
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
@@ -212,6 +248,8 @@ function initViewerCanvas() {
         if (e.touches.length < 2) {
             lastTouchDistance = 0;
             lastTouchCenter = null;
+            // Reset pinching after a short delay so the mouse:up doesn't trigger modal
+            setTimeout(() => { isPinching = false; }, 300);
         }
     });
 
