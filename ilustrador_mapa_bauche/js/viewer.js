@@ -95,6 +95,7 @@ function initViewerCanvas() {
     let lastPosX, lastPosY;
     let panStartX, panStartY;
     let panMoved = false;
+    let tapTarget = null;
 
     function getEventPos(e) {
         if (e.touches && e.touches.length > 0) {
@@ -110,6 +111,7 @@ function initViewerCanvas() {
         if (opt.e.touches && opt.e.touches.length > 1) return;
         isPanning = true;
         panMoved = false;
+        tapTarget = opt.target || null;
         const pos = getEventPos(opt.e);
         lastPosX = pos.x;
         lastPosY = pos.y;
@@ -124,7 +126,7 @@ function initViewerCanvas() {
         const pos = getEventPos(opt.e);
         const dx = pos.x - panStartX;
         const dy = pos.y - panStartY;
-        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
             panMoved = true;
         }
         const vpt = canvas.viewportTransform;
@@ -135,16 +137,17 @@ function initViewerCanvas() {
         lastPosY = pos.y;
     });
 
-    canvas.on('mouse:up', (opt) => {
+    canvas.on('mouse:up', () => {
         const wasTap = !panMoved;
         isPanning = false;
         panMoved = false;
         canvas.defaultCursor = 'grab';
 
-        // If it was a tap (no drag), check if target has loteId
-        if (wasTap && opt.target && opt.target.loteId) {
-            mostrarDetalleLote(opt.target.loteId);
+        // If it was a tap (no drag), show modal
+        if (wasTap && tapTarget && tapTarget.loteId) {
+            mostrarDetalleLote(tapTarget.loteId);
         }
+        tapTarget = null;
     });
 
     canvas.upperCanvasEl.addEventListener('contextmenu', (e) => e.preventDefault());
