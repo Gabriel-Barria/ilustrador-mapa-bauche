@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ViewerState.token = params.get('token');
 
     if (!ViewerState.token) {
+        document.getElementById('viewer-loading').classList.add('hidden');
         mostrarError();
         return;
     }
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load metadata
         const metaResponse = await fetch(`/api/shared/${ViewerState.token}/metadata`);
         if (!metaResponse.ok) {
+            document.getElementById('viewer-loading').classList.add('hidden');
             mostrarError();
             return;
         }
@@ -53,11 +55,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupInteracciones();
         setupExportButtons();
 
+        // Hide loading overlay
+        document.getElementById('viewer-loading').classList.add('hidden');
+
         // Start polling for changes
         iniciarPolling();
 
     } catch (error) {
         console.error('Error al inicializar visor:', error);
+        document.getElementById('viewer-loading').classList.add('hidden');
         mostrarError();
     }
 });
